@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     retrieval_min_similarity: float = 0.30
     sqlite_path: str = "./data/northwind.db"
     chroma_path: str = "./data/chroma"
-    policies_dir: str = "./policies"
-    submissions_dir: str = "./submissions"
+    policies_dir: str = "./data/policies"
+    submissions_dir: str = "./data/submissions"
 
     model_config = SettingsConfigDict(
         env_file=".env",
