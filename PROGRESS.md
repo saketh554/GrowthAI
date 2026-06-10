@@ -4,8 +4,8 @@ Update this after every verified slice. Newest entry on top. This is the memory 
 Cursor chats — start each new chat by referencing docs/AGENTS.md, docs/PLAN.md, and this file.
 
 ## Status summary
-- Current part: Part 0 (scaffolding)
-- Last green commit: (none yet)
+- Current part: Part 1 (data models and persistence)
+- Last green commit: (working tree, not committed)
 - Live URL: (not deployed)
 - Known issues / TODO: (none yet)
 
@@ -16,13 +16,14 @@ Record any decision that deviates from or refines docs/AGENTS.md, with a one-lin
 ## Slice log
 Format: date - part - what was done - how it was verified - commit/tag
 
+- 2026-06-10 - Part 0 - scaffolded Python project, created backend/frontend/eval/data layout, added FastAPI app and `/api/health`, aligned `.env.example` paths - verified with an ephemeral uvicorn run returning 200 + expected JSON from `/api/health` - (not committed)
 - 2026-06-10 - Part 0 - repo scaffolded, docs + cursor rules added - server boots, /api/health 200 - (commit hash)
 ```
 (add new entries above this line)
 ```
 
 ## Per-part completion (mirror of docs/PLAN.md)
-- [ ] Part 0: Scaffolding and guardrails
+- [x] Part 0: Scaffolding and guardrails
 - [ ] Part 1: Data models and persistence
 - [ ] Part 2: Policy ingestion and retrieval (RAG)
 - [ ] Part 3: Receipt extraction (PDF + image + text)
