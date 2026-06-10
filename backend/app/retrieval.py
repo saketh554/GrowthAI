@@ -197,7 +197,8 @@ class RetrievalService:
 
         results: list[RetrievalResult] = []
         for chunk_id, text, metadata, distance in zip(ids, docs, metas, distances, strict=False):
-            similarity = max(0.0, 1.0 - float(distance))
+            # Chroma distance scale depends on index metric; map monotonically to [0,1].
+            similarity = 1.0 / (1.0 + max(0.0, float(distance)))
             cross_refs = []
             if metadata and "cross_references" in metadata:
                 raw_refs = metadata["cross_references"]

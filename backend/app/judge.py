@@ -1,0 +1,199 @@
+from __future__ import annotations
+
+import re
+from typing import Literal
+
+from openai import OpenAI
+from pydantic import BaseModel, Field
+
+from backend.app.extraction import ExtractedReceipt
+from backend.app.retrieval import RetrievalResult, RetrievalService
+from backend.app.settings import Settings
+
+
+class CitedClause(BaseModel):
+    doc_id: str
+    section: str
+    quoted_text: str
+
+
+class JudgedVerdict(BaseModel):
+    verdict: Literal["compliant", "flagged", "rejected"]
+    reasoning: str
+    cited_clauses: list[CitedClause] = Field(default_factory=list)
+    model_confidence: float = Field(ge=0.0, le=1.0)
+
+
+class JudgmentOutcome(BaseModel):
+    verdict: Literal["compliant", "flagged", "rejected"]
+    reasoning: str
+    cited_clauses: list[CitedClause] = Field(default_factory=list)
+    confidence: float = Field(ge=0.0, le=1.0)
+    retrieval_similarity: float = Field(ge=0.0, le=1.0)
+    extraction_confidence: float = Field(ge=0.0, le=1.0)
+    issues: list[str] = Field(default_factory=list)
+
+
+JUDGE_SYSTEM_PROMPT = (
+    "You are an expense pre-review judge. "
+    "You must decide one verdict: compliant, flagged, or rejected. "
+    "Use only provided extracted receipt fields, trip context, and retrieved policy chunks. "
+    "Any citation must be a verbatim quote from one of the retrieved chunks. "
+    "If evidence is weak, conflicting, or context is incomplete, choose flagged."
+)
+
+
+def _normalize_for_match(value: str) -> str:
+    return re.sub(r"\s+", " ", value).strip().lower()
+
+
+class JudgmentService:
+    def __init__(self, settings: Settings, retrieval: RetrievalService) -> None:
+        self._settings = settings
+        self._retrieval = retrieval
+        self._client = OpenAI(api_key=settings.openai_api_key)
+
+    def judge_line_item(
+        self,
+        extracted: ExtractedReceipt,
+        extraction_confidence: float,
+        trip_context: str,
+    ) -> JudgmentOutcome:
+        query = self._build_query(extracted, trip_context)
+        retrieved = self._retrieval.retrieve(query=query, k=self._settings.retrieval_top_k)
+        if not retrieved:
+            return JudgmentOutcome(
+                verdict="flagged",
+                reasoning="No relevant policy chunks were retrieved; requires human review.",
+                cited_clauses=[],
+                confidence=0.1,
+                retrieval_similarity=0.0,
+                extraction_confidence=extraction_confidence,
+                issues=["no policy chunks retrieved"],
+            )
+
+        try:
+            judged = self._judge_with_model(extracted, trip_context, retrieved)
+        except Exception as exc:
+            return JudgmentOutcome(
+                verdict="flagged",
+                reasoning="Judgment model failed; requires human review.",
+                cited_clauses=[],
+                confidence=0.1,
+                retrieval_similarity=max(item.similarity for item in retrieved),
+                extraction_confidence=extraction_confidence,
+                issues=[f"judgment failed: {exc}"],
+            )
+
+        verified_citations, invalid_count = self._verify_citations(judged.cited_clauses, retrieved)
+        retrieval_similarity = max(item.similarity for item in retrieved)
+        issues: list[str] = []
+        verdict = judged.verdict
+        reasoning = judged.reasoning
+
+        if invalid_count > 0:
+            issues.append(f"removed {invalid_count} non-verbatim citation(s)")
+
+        if verdict != "flagged" and not verified_citations:
+            issues.append("missing valid citation support for non-flagged verdict")
+            verdict = "flagged"
+            reasoning = "Insufficient citation support after verification; routed for human review."
+
+        if retrieval_similarity < self._settings.retrieval_min_similarity:
+            issues.append("retrieval similarity below threshold")
+            verdict = "flagged"
+
+        if extraction_confidence < 0.55:
+            issues.append("low extraction confidence")
+            verdict = "flagged"
+
+        confidence = self._compose_confidence(
+            extraction_confidence=extraction_confidence,
+            retrieval_similarity=retrieval_similarity,
+            model_confidence=judged.model_confidence,
+            issue_count=len(issues),
+        )
+
+        return JudgmentOutcome(
+            verdict=verdict,
+            reasoning=reasoning,
+            cited_clauses=verified_citations,
+            confidence=confidence,
+            retrieval_similarity=retrieval_similarity,
+            extraction_confidence=extraction_confidence,
+            issues=issues,
+        )
+
+    @staticmethod
+    def _build_query(extracted: ExtractedReceipt, trip_context: str) -> str:
+        parts = [
+            f"vendor={extracted.vendor or 'unknown'}",
+            f"category={extracted.category or 'unknown'}",
+            f"amount={extracted.amount if extracted.amount is not None else 'unknown'}",
+            f"meal_type={extracted.meal_type or 'n/a'}",
+            f"details={extracted.line_details or 'n/a'}",
+            f"trip_context={trip_context or 'n/a'}",
+        ]
+        return " | ".join(parts)
+
+    def _judge_with_model(
+        self,
+        extracted: ExtractedReceipt,
+        trip_context: str,
+        retrieved: list[RetrievalResult],
+    ) -> JudgedVerdict:
+        context_blocks = []
+        for item in retrieved:
+            context_blocks.append(
+                (
+                    f"doc_id={item.doc_id}, section={item.section}, similarity={item.similarity:.4f}\n"
+                    f"{item.text}"
+                )
+            )
+        completion = self._client.beta.chat.completions.parse(
+            model=self._settings.judge_model,
+            messages=[
+                {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": (
+                        "Extracted receipt (JSON-like):\n"
+                        f"{extracted.model_dump_json(indent=2)}\n\n"
+                        f"Trip context:\n{trip_context}\n\n"
+                        "Retrieved policy chunks:\n"
+                        + "\n\n---\n\n".join(context_blocks)
+                    ),
+                },
+            ],
+            response_format=JudgedVerdict,
+        )
+        return completion.choices[0].message.parsed
+
+    @staticmethod
+    def _verify_citations(
+        citations: list[CitedClause], retrieved: list[RetrievalResult]
+    ) -> tuple[list[CitedClause], int]:
+        normalized_chunks = [_normalize_for_match(item.text) for item in retrieved]
+        verified: list[CitedClause] = []
+        invalid_count = 0
+        for citation in citations:
+            quote = _normalize_for_match(citation.quoted_text)
+            if not quote:
+                invalid_count += 1
+                continue
+            if any(quote in chunk for chunk in normalized_chunks):
+                verified.append(citation)
+            else:
+                invalid_count += 1
+        return verified, invalid_count
+
+    @staticmethod
+    def _compose_confidence(
+        extraction_confidence: float,
+        retrieval_similarity: float,
+        model_confidence: float,
+        issue_count: int,
+    ) -> float:
+        base = (0.35 * extraction_confidence) + (0.35 * retrieval_similarity) + (0.30 * model_confidence)
+        penalty = min(0.4, issue_count * 0.08)
+        return max(0.05, min(0.95, base - penalty))

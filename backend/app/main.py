@@ -7,7 +7,7 @@ from backend.app.settings import Settings, ensure_data_dirs
 def create_app() -> FastAPI:
     settings = Settings()
     ensure_data_dirs(settings)
-    engine, session_factory, retrieval, extraction = init_persistence(settings)
+    engine, session_factory, retrieval, extraction, judgment = init_persistence(settings)
 
     app = FastAPI(title="Northwind Expense Pre-Review API")
     app.state.settings = settings
@@ -15,6 +15,7 @@ def create_app() -> FastAPI:
     app.state.session_factory = session_factory
     app.state.retrieval = retrieval
     app.state.extraction = extraction
+    app.state.judgment = judgment
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
@@ -29,6 +30,19 @@ def create_app() -> FastAPI:
     def extraction_test(path: str) -> dict[str, object]:
         outcome = app.state.extraction.extract_receipt(path)
         return outcome.model_dump()
+
+    @app.get("/api/judgment/test")
+    def judgment_test(path: str, trip_context: str = "") -> dict[str, object]:
+        extraction_outcome = app.state.extraction.extract_receipt(path)
+        judged = app.state.judgment.judge_line_item(
+            extracted=extraction_outcome.extracted,
+            extraction_confidence=extraction_outcome.confidence,
+            trip_context=trip_context,
+        )
+        return {
+            "extraction": extraction_outcome.model_dump(),
+            "judgment": judged.model_dump(),
+        }
 
     return app
 
