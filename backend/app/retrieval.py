@@ -117,7 +117,7 @@ def _chunk_document(doc: PolicyDoc) -> list[PolicyChunk]:
         header_match = SECTION_HEADER.match(stripped)
         if header_match:
             flush()
-            buffer = []
+            buffer = [stripped]
             current_section = header_match.group(1)
             current_title = _normalize_whitespace(header_match.group(2))
             continue
@@ -150,7 +150,7 @@ def _collect_chunks(policies_dir: str) -> list[PolicyChunk]:
 
 def _collection(client: chromadb.ClientAPI, settings: Settings, openai_client: OpenAI) -> Collection:
     return client.get_or_create_collection(
-        name="policy_chunks_v1",
+        name="policy_chunks_v2",
         embedding_function=OpenAIEmbeddingFunction(openai_client, settings.embedding_model),
         metadata={"embedding_model": settings.embedding_model},
     )

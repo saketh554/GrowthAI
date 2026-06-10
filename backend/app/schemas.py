@@ -96,5 +96,6 @@ class QARequest(BaseModel):
 class QAResponse(BaseModel):
     answer: str
     refused: bool
+    refusal_reason: str | None = None
     cited_clauses: list[CitedClauseRead] = Field(default_factory=list)
 

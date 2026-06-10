@@ -306,6 +306,7 @@ def create_app() -> FastAPI:
         return QAResponse(
             answer=result.answer,
             refused=result.refused,
+            refusal_reason=result.refusal_reason,
             cited_clauses=[
                 {"doc_id": clause.doc_id, "section": clause.section, "quoted_text": clause.quoted_text}
                 for clause in result.cited_clauses
