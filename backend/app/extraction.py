@@ -7,9 +7,9 @@ from pathlib import Path
 from typing import Literal
 
 import fitz
-from openai import OpenAI
 from pydantic import BaseModel, Field
 
+from backend.app.openai_utils import create_openai_client, with_retry
 from backend.app.settings import Settings
 
 
@@ -64,7 +64,7 @@ CATEGORY_SYNONYMS = {
 class ExtractionService:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        self._client = OpenAI(api_key=settings.openai_api_key)
+        self._client = create_openai_client(settings)
 
     def extract_receipt(self, receipt_path: str) -> ExtractionOutcome:
         path = Path(receipt_path)
@@ -98,34 +98,42 @@ class ExtractionService:
             return self._failed(f"failed to extract receipt: {exc}")
 
     def _extract_from_text(self, text: str, filename: str) -> ExtractedReceipt:
-        completion = self._client.beta.chat.completions.parse(
-            model=self._settings.extraction_model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": f"Filename: {filename}\n\nReceipt text:\n{text}",
-                },
-            ],
-            response_format=ExtractedReceipt,
+        completion = with_retry(
+            lambda: self._client.beta.chat.completions.parse(
+                model=self._settings.extraction_model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {
+                        "role": "user",
+                        "content": f"Filename: {filename}\n\nReceipt text:\n{text}",
+                    },
+                ],
+                response_format=ExtractedReceipt,
+            ),
+            settings=self._settings,
+            op_name="extraction_text",
         )
         return completion.choices[0].message.parsed
 
     def _extract_from_image(self, image_bytes: bytes, mime: str, filename: str) -> ExtractedReceipt:
         data_uri = f"data:{mime};base64,{base64.b64encode(image_bytes).decode('utf-8')}"
-        completion = self._client.beta.chat.completions.parse(
-            model=self._settings.extraction_model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": f"Filename: {filename}. Extract the receipt fields."},
-                        {"type": "image_url", "image_url": {"url": data_uri}},
-                    ],
-                },
-            ],
-            response_format=ExtractedReceipt,
+        completion = with_retry(
+            lambda: self._client.beta.chat.completions.parse(
+                model=self._settings.extraction_model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": f"Filename: {filename}. Extract the receipt fields."},
+                            {"type": "image_url", "image_url": {"url": data_uri}},
+                        ],
+                    },
+                ],
+                response_format=ExtractedReceipt,
+            ),
+            settings=self._settings,
+            op_name="extraction_image",
         )
         return completion.choices[0].message.parsed
 

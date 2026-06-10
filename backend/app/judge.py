@@ -4,10 +4,10 @@ import re
 from datetime import datetime
 from typing import Literal
 
-from openai import OpenAI
 from pydantic import BaseModel, Field
 
 from backend.app.extraction import ExtractedReceipt
+from backend.app.openai_utils import create_openai_client, with_retry
 from backend.app.retrieval import RetrievalResult, RetrievalService
 from backend.app.settings import Settings
 
@@ -52,7 +52,7 @@ class JudgmentService:
     def __init__(self, settings: Settings, retrieval: RetrievalService) -> None:
         self._settings = settings
         self._retrieval = retrieval
-        self._client = OpenAI(api_key=settings.openai_api_key)
+        self._client = create_openai_client(settings)
 
     def judge_line_item(
         self,
@@ -191,22 +191,26 @@ class JudgmentService:
                     f"{item.text}"
                 )
             )
-        completion = self._client.beta.chat.completions.parse(
-            model=self._settings.judge_model,
-            messages=[
-                {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": (
-                        "Extracted receipt (JSON-like):\n"
-                        f"{extracted.model_dump_json(indent=2)}\n\n"
-                        f"Trip context:\n{trip_context}\n\n"
-                        "Retrieved policy chunks:\n"
-                        + "\n\n---\n\n".join(context_blocks)
-                    ),
-                },
-            ],
-            response_format=JudgedVerdict,
+        completion = with_retry(
+            lambda: self._client.beta.chat.completions.parse(
+                model=self._settings.judge_model,
+                messages=[
+                    {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
+                    {
+                        "role": "user",
+                        "content": (
+                            "Extracted receipt (JSON-like):\n"
+                            f"{extracted.model_dump_json(indent=2)}\n\n"
+                            f"Trip context:\n{trip_context}\n\n"
+                            "Retrieved policy chunks:\n"
+                            + "\n\n---\n\n".join(context_blocks)
+                        ),
+                    },
+                ],
+                response_format=JudgedVerdict,
+            ),
+            settings=self._settings,
+            op_name="judgment",
         )
         return completion.choices[0].message.parsed
 
@@ -214,15 +218,29 @@ class JudgmentService:
     def _verify_citations(
         citations: list[CitedClause], retrieved: list[RetrievalResult]
     ) -> tuple[list[CitedClause], int]:
-        normalized_chunks = [_normalize_for_match(item.text) for item in retrieved]
+        normalized_chunks = [
+            (
+                _normalize_for_match(item.text),
+                _normalize_for_match(item.doc_id),
+                _normalize_for_match(item.section),
+            )
+            for item in retrieved
+        ]
         verified: list[CitedClause] = []
         invalid_count = 0
         for citation in citations:
             quote = _normalize_for_match(citation.quoted_text)
+            cited_doc = _normalize_for_match(citation.doc_id)
+            cited_section = _normalize_for_match(citation.section)
             if not quote:
                 invalid_count += 1
                 continue
-            if any(quote in chunk for chunk in normalized_chunks):
+            if any(
+                (quote in chunk_text)
+                and (not cited_doc or cited_doc == chunk_doc)
+                and (not cited_section or cited_section == chunk_section)
+                for chunk_text, chunk_doc, chunk_section in normalized_chunks
+            ):
                 verified.append(citation)
             else:
                 invalid_count += 1

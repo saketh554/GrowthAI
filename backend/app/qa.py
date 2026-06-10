@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import re
 
-from openai import OpenAI
 from pydantic import BaseModel, Field
 
 from backend.app.judge import CitedClause
+from backend.app.openai_utils import create_openai_client, with_retry
 from backend.app.retrieval import RetrievalResult, RetrievalService
 from backend.app.settings import Settings
 
@@ -21,7 +21,7 @@ class QAService:
     def __init__(self, settings: Settings, retrieval: RetrievalService) -> None:
         self._settings = settings
         self._retrieval = retrieval
-        self._client = OpenAI(api_key=settings.openai_api_key)
+        self._client = create_openai_client(settings)
 
     _OUT_OF_SCOPE_PATTERNS = [
         r"\bweather\b",
@@ -91,25 +91,29 @@ class QAService:
         chunks = []
         for item in retrieved:
             chunks.append(f"doc_id={item.doc_id}, section={item.section}\n{item.text}")
-        completion = self._client.beta.chat.completions.parse(
-            model=self._settings.judge_model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Answer policy-only questions using only the provided policy chunks. "
-                        "If out of scope, refuse and set refused=true with refusal_reason='out_of_scope'. "
-                        "If information is weak or missing, refuse with refusal_reason='insufficient_policy_support'. "
-                        "If you answer, set refused=false and refusal_reason=null. "
-                        "Any citation quote must be verbatim from a chunk."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": f"Question: {question}\n\nPolicy chunks:\n" + "\n\n---\n\n".join(chunks),
-                },
-            ],
-            response_format=QAResult,
+        completion = with_retry(
+            lambda: self._client.beta.chat.completions.parse(
+                model=self._settings.judge_model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Answer policy-only questions using only the provided policy chunks. "
+                            "If out of scope, refuse and set refused=true with refusal_reason='out_of_scope'. "
+                            "If information is weak or missing, refuse with refusal_reason='insufficient_policy_support'. "
+                            "If you answer, set refused=false and refusal_reason=null. "
+                            "Any citation quote must be verbatim from a chunk."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Question: {question}\n\nPolicy chunks:\n" + "\n\n---\n\n".join(chunks),
+                    },
+                ],
+                response_format=QAResult,
+            ),
+            settings=self._settings,
+            op_name="qa",
         )
         return completion.choices[0].message.parsed
 

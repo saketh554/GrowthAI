@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated
@@ -363,7 +364,10 @@ def _process_uploaded_file(
     extraction_service,
     judgment_service,
 ) -> LineItemRead:
-    target_path = upload_dir / incoming.filename
+    original_name = incoming.filename or "upload.bin"
+    safe_name = _sanitize_upload_filename(original_name)
+    _validate_upload_constraints(incoming=incoming, safe_name=safe_name)
+    target_path = _build_unique_upload_path(upload_dir=upload_dir, safe_name=safe_name)
     with target_path.open("wb") as handle:
         shutil.copyfileobj(incoming.file, handle)
 
@@ -376,7 +380,7 @@ def _process_uploaded_file(
 
     line_item = models.LineItem(
         submission_id=submission.id,
-        receipt_filename=incoming.filename,
+        receipt_filename=target_path.name,
         category=extraction_outcome.extracted.category,
         vendor=extraction_outcome.extracted.vendor,
         date=extraction_outcome.extracted.date,
@@ -420,3 +424,39 @@ def _process_uploaded_file(
             )
         ],
     )
+
+
+def _sanitize_upload_filename(filename: str) -> str:
+    candidate = Path(filename).name.strip()
+    if not candidate:
+        candidate = "upload.bin"
+    return candidate
+
+
+def _build_unique_upload_path(upload_dir: Path, safe_name: str) -> Path:
+    stem = Path(safe_name).stem or "file"
+    suffix = Path(safe_name).suffix
+    unique_name = f"{stem}_{uuid.uuid4().hex[:8]}{suffix}"
+    return upload_dir / unique_name
+
+
+def _validate_upload_constraints(*, incoming: UploadFile, safe_name: str) -> None:
+    settings = app.state.settings
+    allowed = {
+        ext.strip().lower()
+        for ext in settings.upload_allowed_extensions.split(",")
+        if ext.strip()
+    }
+    ext = Path(safe_name).suffix.lower()
+    if ext not in allowed:
+        raise HTTPException(status_code=400, detail=f"unsupported file extension: {ext or 'unknown'}")
+
+    max_bytes = int(settings.upload_max_file_size_mb) * 1024 * 1024
+    incoming.file.seek(0, 2)
+    size = incoming.file.tell()
+    incoming.file.seek(0)
+    if size > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"file too large: {size} bytes exceeds {max_bytes} bytes",
+        )
