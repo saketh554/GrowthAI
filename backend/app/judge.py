@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from typing import Literal
 
 from openai import OpenAI
@@ -99,6 +100,15 @@ class JudgmentService:
             verdict = "flagged"
             reasoning = "Insufficient citation support after verification; routed for human review."
 
+        verdict, reasoning, lodging_issue = self._apply_lodging_guardrail(
+            extracted=extracted,
+            verdict=verdict,
+            reasoning=reasoning,
+            retrieved=retrieved,
+        )
+        if lodging_issue:
+            issues.append(lodging_issue)
+
         if retrieval_similarity < self._settings.retrieval_min_similarity:
             issues.append("retrieval similarity below threshold")
             verdict = "flagged"
@@ -123,6 +133,37 @@ class JudgmentService:
             extraction_confidence=extraction_confidence,
             issues=issues,
         )
+
+    @classmethod
+    def _apply_lodging_guardrail(
+        cls,
+        extracted: ExtractedReceipt,
+        verdict: Literal["compliant", "flagged", "rejected"],
+        reasoning: str,
+        retrieved: list[RetrievalResult],
+    ) -> tuple[Literal["compliant", "flagged", "rejected"], str, str | None]:
+        if (extracted.category or "").lower() != "lodging":
+            return verdict, reasoning, None
+        if extracted.amount is None:
+            return verdict, reasoning, None
+
+        nights = cls._infer_nights(extracted.line_details)
+        nightly_cap = cls._extract_lodging_nightly_cap(retrieved)
+        if nights is None or nightly_cap is None:
+            return verdict, reasoning, None
+
+        allowed_total = nightly_cap * nights
+        if extracted.amount <= allowed_total + 0.01 and verdict == "rejected":
+            return (
+                "flagged",
+                (
+                    f"The total lodging amount (${extracted.amount:.2f}) is within the inferred "
+                    f"nightly cap (${nightly_cap:.2f}) across {nights} night(s), so rejection is "
+                    "not justified. Routed for human confirmation."
+                ),
+                "lodging guardrail prevented over-cap rejection",
+            )
+        return verdict, reasoning, None
 
     @staticmethod
     def _build_query(extracted: ExtractedReceipt, trip_context: str) -> str:
@@ -186,6 +227,42 @@ class JudgmentService:
             else:
                 invalid_count += 1
         return verified, invalid_count
+
+    @staticmethod
+    def _extract_lodging_nightly_cap(retrieved: list[RetrievalResult]) -> float | None:
+        cap_matches: list[float] = []
+        cap_pattern = re.compile(r"\$([0-9]+(?:\.[0-9]{1,2})?)\s*(?:/|per)\s*night", re.IGNORECASE)
+        for item in retrieved:
+            for matched in cap_pattern.findall(item.text):
+                try:
+                    cap_matches.append(float(matched))
+                except ValueError:
+                    continue
+        if not cap_matches:
+            return None
+        return min(cap_matches)
+
+    @staticmethod
+    def _infer_nights(line_details: str | None) -> int | None:
+        if not line_details:
+            return None
+        match = re.search(
+            r"from\s+(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})\s+to\s+(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})",
+            line_details,
+            re.IGNORECASE,
+        )
+        if not match:
+            return None
+        start_raw, end_raw = match.group(1), match.group(2)
+        for fmt in ("%d %b %Y", "%d %B %Y"):
+            try:
+                start = datetime.strptime(start_raw, fmt)
+                end = datetime.strptime(end_raw, fmt)
+                nights = (end - start).days
+                return nights if nights > 0 else None
+            except ValueError:
+                continue
+        return None
 
     @staticmethod
     def _compose_confidence(

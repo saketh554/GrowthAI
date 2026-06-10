@@ -69,6 +69,16 @@ type QAResponse = {
   cited_clauses: CitedClause[];
 };
 
+type EmployeeCreatePayload = {
+  id: string;
+  name: string;
+  grade: number;
+  title: string;
+  department: string;
+  manager_id: string;
+  home_base: string;
+};
+
 const API_BASE = "http://127.0.0.1:8000";
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
@@ -106,6 +116,15 @@ function App() {
   const [qaResponse, setQaResponse] = useState<QAResponse | null>(null);
   const [statusMessage, setStatusMessage] = useState<string>("Loading...");
   const [isBusy, setIsBusy] = useState(false);
+  const [newEmployee, setNewEmployee] = useState<EmployeeCreatePayload>({
+    id: "",
+    name: "",
+    grade: 5,
+    title: "",
+    department: "",
+    manager_id: "",
+    home_base: "",
+  });
 
   const firstVerdictId = useMemo(() => {
     return submissionDetail?.line_items?.[0]?.verdicts?.[0]?.id ?? null;
@@ -254,6 +273,38 @@ function App() {
     }
   }
 
+  async function handleCreateEmployee(event: FormEvent) {
+    event.preventDefault();
+    if (!newEmployee.id || !newEmployee.name || !newEmployee.title || !newEmployee.department || !newEmployee.manager_id || !newEmployee.home_base) {
+      setStatusMessage("Fill all new employee fields before submitting.");
+      return;
+    }
+    setIsBusy(true);
+    try {
+      const created = await api<Employee>("/api/employees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newEmployee),
+      });
+      await refreshEmployees();
+      setSelectedEmployeeId(created.id);
+      setStatusMessage(`Created new employee ${created.name} (${created.id}).`);
+      setNewEmployee({
+        id: "",
+        name: "",
+        grade: 5,
+        title: "",
+        department: "",
+        manager_id: "",
+        home_base: "",
+      });
+    } catch (error) {
+      setStatusMessage(`Create employee failed: ${(error as Error).message}`);
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
       <div className="mx-auto max-w-7xl space-y-6 px-4 py-6">
@@ -263,7 +314,7 @@ function App() {
           <p className="mt-2 text-sm font-medium text-indigo-700">{isBusy ? "Working..." : statusMessage}</p>
         </header>
 
-        <section className="grid gap-4 lg:grid-cols-2">
+        <section className="grid gap-4 lg:grid-cols-3">
           <form onSubmit={handleCreateSubmission} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="mb-3 text-lg font-semibold">Create Submission</h2>
             <div className="space-y-3">
@@ -337,6 +388,63 @@ function App() {
                 className="rounded bg-indigo-600 px-4 py-2 text-white disabled:cursor-not-allowed disabled:bg-slate-400"
               >
                 Upload and Review
+              </button>
+            </div>
+          </form>
+
+          <form onSubmit={handleCreateEmployee} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <h2 className="mb-3 text-lg font-semibold">Create New Employee</h2>
+            <div className="space-y-2">
+              <input
+                value={newEmployee.id}
+                onChange={(event) => setNewEmployee((prev) => ({ ...prev, id: event.target.value }))}
+                placeholder="Employee ID (e.g. NW-09999)"
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              />
+              <input
+                value={newEmployee.name}
+                onChange={(event) => setNewEmployee((prev) => ({ ...prev, name: event.target.value }))}
+                placeholder="Full name"
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              />
+              <input
+                type="number"
+                min={1}
+                value={newEmployee.grade}
+                onChange={(event) => setNewEmployee((prev) => ({ ...prev, grade: Number(event.target.value) }))}
+                placeholder="Grade"
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              />
+              <input
+                value={newEmployee.title}
+                onChange={(event) => setNewEmployee((prev) => ({ ...prev, title: event.target.value }))}
+                placeholder="Title"
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              />
+              <input
+                value={newEmployee.department}
+                onChange={(event) => setNewEmployee((prev) => ({ ...prev, department: event.target.value }))}
+                placeholder="Department"
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              />
+              <input
+                value={newEmployee.manager_id}
+                onChange={(event) => setNewEmployee((prev) => ({ ...prev, manager_id: event.target.value }))}
+                placeholder="Manager ID"
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              />
+              <input
+                value={newEmployee.home_base}
+                onChange={(event) => setNewEmployee((prev) => ({ ...prev, home_base: event.target.value }))}
+                placeholder="Home base"
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+              />
+              <button
+                type="submit"
+                disabled={isBusy}
+                className="rounded bg-indigo-600 px-4 py-2 text-white disabled:cursor-not-allowed disabled:bg-slate-400"
+              >
+                Add Employee
               </button>
             </div>
           </form>
