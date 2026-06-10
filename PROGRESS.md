@@ -4,7 +4,7 @@ Update this after every verified slice. Newest entry on top. This is the memory 
 Cursor chats — start each new chat by referencing docs/AGENTS.md, docs/PLAN.md, and this file.
 
 ## Status summary
-- Current part: Part 7 (frontend UI)
+- Current part: Part 8 (evaluation harness)
 - Last green commit: (working tree, not committed)
 - Live URL: (not deployed)
 - Known issues / TODO: current policy corpus is incomplete (only 8 PDFs), so judgment is conservative/flag-heavy when similarity or citation support is weak.
@@ -16,6 +16,7 @@ Record any decision that deviates from or refines docs/AGENTS.md, with a one-lin
 ## Slice log
 Format: date - part - what was done - how it was verified - commit/tag
 
+- 2026-06-10 - Part 7 - scaffolded React+Vite+Tailwind frontend and implemented reviewer UI flows (employee selection, submission creation, mixed-file upload, per-line verdict cards with citations/confidence, override form/history, submission history/detail, and policy Q&A panel with decline state) - verified with `npm run build` and `uv run python eval/verify_part7.py` (frontend builds and produces dist artifact) - (not committed)
 - 2026-06-10 - Part 6 - hardened policy QA refusal behavior with explicit out-of-scope refusal, low-similarity refusal, grounded-citation enforcement, and refusal reason field in API responses; added `eval/verify_part6.py` - verified with `uv run python eval/verify_part6.py` (in-scope grounded answer + out-of-scope refusal + weak-evidence refusal all pass) - (not committed)
 - 2026-06-10 - Part 5 - implemented backend API endpoints for employees, submissions, receipt upload+extract+judge+persist flow, submission history/detail filters, verdict override, and policy QA logging; added typed API schemas and QA service - verified with `uv run python eval/verify_part5.py` (health, employees, submission creation, upload flow, listing/detail, override, and QA all pass) - (not committed)
 - 2026-06-10 - Part 4 - added bulk evaluator `eval/verify_part4_bulk.py` and calibrated retrieval similarity mapping for Chroma distances to avoid over-flagging - verified with `uv run python eval/verify_part4_bulk.py` (34 receipts: 16 compliant, 5 rejected, 13 flagged; avg confidence 0.7292; non-flagged citation coverage 100%) - (not committed)
@@ -39,7 +40,7 @@ Format: date - part - what was done - how it was verified - commit/tag
 - [x] Part 4: Judgment engine
 - [x] Part 5: Backend API
 - [x] Part 6: Policy Q&A with refusal
-- [ ] Part 7: Frontend UI
+- [x] Part 7: Frontend UI
 - [ ] Part 8: Evaluation harness
 - [ ] Part 9: Deployment, README, polish
 

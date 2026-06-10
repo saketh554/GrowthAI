@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import and_, select
 
 from backend.app import models
@@ -33,6 +34,18 @@ def create_app() -> FastAPI:
     engine, session_factory, retrieval, extraction, judgment, qa = init_persistence(settings)
 
     app = FastAPI(title="Northwind Expense Pre-Review API")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://127.0.0.1:5173",
+            "http://localhost:5173",
+            "http://127.0.0.1:4173",
+            "http://localhost:4173",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.state.settings = settings
     app.state.engine = engine
     app.state.session_factory = session_factory
