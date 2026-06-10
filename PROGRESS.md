@@ -4,10 +4,10 @@ Update this after every verified slice. Newest entry on top. This is the memory 
 Cursor chats — start each new chat by referencing docs/AGENTS.md, docs/PLAN.md, and this file.
 
 ## Status summary
-- Current part: Part 1 (data models and persistence)
+- Current part: Part 2 (policy ingestion and retrieval)
 - Last green commit: (working tree, not committed)
 - Live URL: (not deployed)
-- Known issues / TODO: (none yet)
+- Known issues / TODO: local `.env` still points to `./data/submissions` and `./data/policies`; update it to match repo paths before retrieval work.
 
 ## Decisions log
 Record any decision that deviates from or refines docs/AGENTS.md, with a one-line reason.
@@ -16,6 +16,7 @@ Record any decision that deviates from or refines docs/AGENTS.md, with a one-lin
 ## Slice log
 Format: date - part - what was done - how it was verified - commit/tag
 
+- 2026-06-10 - Part 1 - added SQLAlchemy models (Employee/Submission/LineItem/Verdict/Override/QAQuery), SQLite bootstrap, and startup employee seeding from `submissions/*/employee_info.json` (idempotent) - verified schema creation, seed count=5, repeated startup remains 5, and persisted QA row survives restart - (not committed)
 - 2026-06-10 - Part 0 - scaffolded Python project, created backend/frontend/eval/data layout, added FastAPI app and `/api/health`, aligned `.env.example` paths - verified with an ephemeral uvicorn run returning 200 + expected JSON from `/api/health` - (not committed)
 - 2026-06-10 - Part 0 - repo scaffolded, docs + cursor rules added - server boots, /api/health 200 - (commit hash)
 ```
@@ -24,7 +25,7 @@ Format: date - part - what was done - how it was verified - commit/tag
 
 ## Per-part completion (mirror of docs/PLAN.md)
 - [x] Part 0: Scaffolding and guardrails
-- [ ] Part 1: Data models and persistence
+- [x] Part 1: Data models and persistence
 - [ ] Part 2: Policy ingestion and retrieval (RAG)
 - [ ] Part 3: Receipt extraction (PDF + image + text)
 - [ ] Part 4: Judgment engine
