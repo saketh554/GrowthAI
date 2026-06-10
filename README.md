@@ -25,3 +25,11 @@ GET http://127.0.0.1:8000/api/health
 - `eval/` Evaluation harness (planned)
 - `data/` Persistent local data (SQLite + Chroma)
 - `docs/` Planning and project guidance
+
+## Pre-Part-5 gate
+
+Run all verified checks for retrieval, extraction, and judgment before Part 5 API work:
+
+```bash
+uv run python eval/pre_part5_gate.py
+```
