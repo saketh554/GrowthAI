@@ -4,7 +4,7 @@ Update this after every verified slice. Newest entry on top. This is the memory 
 Cursor chats — start each new chat by referencing docs/AGENTS.md, docs/PLAN.md, and this file.
 
 ## Status summary
-- Current part: Part 3 (receipt extraction)
+- Current part: Part 4 (judgment engine)
 - Last green commit: (working tree, not committed)
 - Live URL: (not deployed)
 - Known issues / TODO: current policy corpus is incomplete (only 8 PDFs), so retrieval cannot hit missing TEP docs from the brief.
@@ -16,6 +16,8 @@ Record any decision that deviates from or refines docs/AGENTS.md, with a one-lin
 ## Slice log
 Format: date - part - what was done - how it was verified - commit/tag
 
+- 2026-06-10 - Part 3 - improved extraction normalization (vendor/date/currency/category/meal_type cleanup) and added bulk regression script `eval/verify_part3_bulk.py` - verified with `uv run python eval/verify_part3_bulk.py` (34/34 receipts high-confidence, 0 failures, 0 missing core fields) - (not committed)
+- 2026-06-10 - Part 3 - implemented receipt extraction service with file router (`.pdf` text-first + vision fallback, `.jpg/.png` vision, `.txt` text), schema-constrained structured output (`ExtractedReceipt`), confidence scoring, and graceful failures; wired into app as `/api/extraction/test` - verified with `uv run python eval/verify_part3.py` (PDF + synthetic TXT extraction pass, missing-file graceful failure pass) - (not committed)
 - 2026-06-10 - Part 2 - added repeatable verification script `eval/verify_part2.py` for clean-state index build, idempotency, and retrieval sanity checks - verified with `uv run python eval/verify_part2.py` (pass; 8 PDFs, 612 indexed chunks) - (not committed)
 - 2026-06-10 - Part 2 - implemented policy PDF ingestion (PyMuPDF), section chunking with metadata/cross-refs, persistent Chroma index with OpenAI embeddings, and `retrieve(query,k)` service wired into app startup plus `/api/retrieval/test` endpoint - verified index build (612 chunks), idempotent rebuild behavior, and live retrieval queries for alcohol and dinner-cap prompts - (not committed)
 - 2026-06-10 - Part 1 - added SQLAlchemy models (Employee/Submission/LineItem/Verdict/Override/QAQuery), SQLite bootstrap, and startup employee seeding from `submissions/*/employee_info.json` (idempotent) - verified schema creation, seed count=5, repeated startup remains 5, and persisted QA row survives restart - (not committed)
@@ -29,7 +31,7 @@ Format: date - part - what was done - how it was verified - commit/tag
 - [x] Part 0: Scaffolding and guardrails
 - [x] Part 1: Data models and persistence
 - [x] Part 2: Policy ingestion and retrieval (RAG)
-- [ ] Part 3: Receipt extraction (PDF + image + text)
+- [x] Part 3: Receipt extraction (PDF + image + text)
 - [ ] Part 4: Judgment engine
 - [ ] Part 5: Backend API
 - [ ] Part 6: Policy Q&A with refusal
