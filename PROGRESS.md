@@ -4,7 +4,7 @@ Update this after every verified slice. Newest entry on top. This is the memory 
 Cursor chats — start each new chat by referencing docs/AGENTS.md, docs/PLAN.md, and this file.
 
 ## Status summary
-- Current part: Part 5 (backend API)
+- Current part: Part 6 (policy Q&A with refusal)
 - Last green commit: (working tree, not committed)
 - Live URL: (not deployed)
 - Known issues / TODO: current policy corpus is incomplete (only 8 PDFs), so judgment is conservative/flag-heavy when similarity or citation support is weak.
@@ -16,6 +16,7 @@ Record any decision that deviates from or refines docs/AGENTS.md, with a one-lin
 ## Slice log
 Format: date - part - what was done - how it was verified - commit/tag
 
+- 2026-06-10 - Part 5 - implemented backend API endpoints for employees, submissions, receipt upload+extract+judge+persist flow, submission history/detail filters, verdict override, and policy QA logging; added typed API schemas and QA service - verified with `uv run python eval/verify_part5.py` (health, employees, submission creation, upload flow, listing/detail, override, and QA all pass) - (not committed)
 - 2026-06-10 - Part 4 - added bulk evaluator `eval/verify_part4_bulk.py` and calibrated retrieval similarity mapping for Chroma distances to avoid over-flagging - verified with `uv run python eval/verify_part4_bulk.py` (34 receipts: 16 compliant, 5 rejected, 13 flagged; avg confidence 0.7292; non-flagged citation coverage 100%) - (not committed)
 - 2026-06-10 - Part 4 - implemented judgment engine (`backend/app/judge.py`) with schema-constrained verdicts, retrieval+trip-context grounding, citation faithfulness verification (verbatim check and invalid citation removal), flag/reject/compliant logic, and confidence composition; wired test endpoint `/api/judgment/test` - verified with `uv run python eval/verify_part4.py` (structured verdicts + confidence + citation checks pass; conservative flagging observed when retrieval support is weak) - (not committed)
 - 2026-06-10 - Part 3 - improved extraction normalization (vendor/date/currency/category/meal_type cleanup) and added bulk regression script `eval/verify_part3_bulk.py` - verified with `uv run python eval/verify_part3_bulk.py` (34/34 receipts high-confidence, 0 failures, 0 missing core fields) - (not committed)
@@ -35,7 +36,7 @@ Format: date - part - what was done - how it was verified - commit/tag
 - [x] Part 2: Policy ingestion and retrieval (RAG)
 - [x] Part 3: Receipt extraction (PDF + image + text)
 - [x] Part 4: Judgment engine
-- [ ] Part 5: Backend API
+- [x] Part 5: Backend API
 - [ ] Part 6: Policy Q&A with refusal
 - [ ] Part 7: Frontend UI
 - [ ] Part 8: Evaluation harness
