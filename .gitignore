@@ -1,0 +1,28 @@
+# Secrets
+.env
+.env.local
+
+# Databases and vector index
+*.db
+*.sqlite
+*.sqlite3
+chroma/
+data/chroma/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.uv/
+.pytest_cache/
+.ruff_cache/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
