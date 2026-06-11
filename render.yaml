@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: northwind-expense-pre-review
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    autoDeploy: false
+    healthCheckPath: /api/health
+    disk:
+      name: northwind-runtime
+      mountPath: /app/runtime
+      sizeGB: 10
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SQLITE_PATH
+        value: /app/runtime/northwind.db
+      - key: CHROMA_PATH
+        value: /app/runtime/chroma
+      - key: UPLOADS_DIR
+        value: /app/runtime/uploads
+      - key: POLICIES_DIR
+        value: /app/data/policies
