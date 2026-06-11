@@ -19,6 +19,10 @@ class ExtractedReceipt(BaseModel):
     amount: float | None = None
     currency: str | None = None
     category: str | None = None
+    nights: int | None = None
+    nightly_rate: float | None = None
+    subtotal: float | None = None
+    tip: float | None = None
     meal_type: str | None = None
     line_details: str | None = None
     attendees: list[str] | None = None
@@ -35,7 +39,9 @@ class ExtractionOutcome(BaseModel):
 SYSTEM_PROMPT = (
     "You extract one expense receipt into structured data. "
     "Return only values grounded in the provided content. "
-    "If a field is missing or unclear, return null for that field."
+    "If a field is missing or unclear, return null for that field. "
+    "For lodging receipts, populate nights and nightly_rate (room rate per night, pre-tax). "
+    "For meal receipts, populate subtotal (pre-tax food/drink subtotal before tax/tip) and tip."
 )
 
 DATE_PATTERNS = [
