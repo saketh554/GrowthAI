@@ -56,6 +56,20 @@ def _normalize_for_match(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip().lower()
 
 
+def _section_matches(cited_section: str, chunk_section: str) -> bool:
+    cited = _normalize_for_match(cited_section)
+    chunk = _normalize_for_match(chunk_section)
+    if not cited or not chunk:
+        return True
+    if cited == chunk:
+        return True
+    if chunk.startswith(cited) or cited.startswith(chunk):
+        return True
+    cited_token = cited.split(" ", 1)[0]
+    chunk_token = chunk.split(" ", 1)[0]
+    return bool(cited_token and chunk_token and cited_token == chunk_token)
+
+
 class JudgmentService:
     def __init__(self, settings: Settings, retrieval: RetrievalService) -> None:
         self._settings = settings
@@ -301,7 +315,7 @@ class JudgmentService:
             if any(
                 (quote in chunk_text)
                 and (not cited_doc or cited_doc == chunk_doc)
-                and (not cited_section or cited_section == chunk_section)
+                and _section_matches(cited_section, chunk_section)
                 for chunk_text, chunk_doc, chunk_section in normalized_chunks
             ):
                 verified.append(citation)

@@ -126,10 +126,30 @@ class QAService:
     def _verify_citations(
         citations: list[CitedClause], retrieved: list[RetrievalResult]
     ) -> list[CitedClause]:
-        normalized_chunks = [re.sub(r"\s+", " ", item.text).strip().lower() for item in retrieved]
+        normalized_chunks = [
+            (
+                re.sub(r"\s+", " ", item.text).strip().lower(),
+                re.sub(r"\s+", " ", item.doc_id).strip().lower(),
+                re.sub(r"\s+", " ", item.section).strip().lower(),
+            )
+            for item in retrieved
+        ]
         verified: list[CitedClause] = []
         for citation in citations:
             quote = re.sub(r"\s+", " ", citation.quoted_text).strip().lower()
-            if quote and any(quote in chunk for chunk in normalized_chunks):
+            cited_doc = re.sub(r"\s+", " ", citation.doc_id).strip().lower()
+            cited_section = re.sub(r"\s+", " ", citation.section).strip().lower()
+            if quote and any(
+                (quote in chunk_text)
+                and (not cited_doc or cited_doc == chunk_doc)
+                and (
+                    not cited_section
+                    or chunk_section == cited_section
+                    or chunk_section.startswith(cited_section)
+                    or cited_section.startswith(chunk_section)
+                    or chunk_section.split(" ", 1)[0] == cited_section.split(" ", 1)[0]
+                )
+                for chunk_text, chunk_doc, chunk_section in normalized_chunks
+            ):
                 verified.append(citation)
         return verified
