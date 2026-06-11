@@ -1,0 +1,33 @@
+{
+  "line_items": [
+    {
+      "receipt_path": "data/submissions/03_dinner_over_cap/receipts/04_dinner_alinea.pdf",
+      "expected_verdict": "rejected",
+      "expected_policy_doc": "TEP-001",
+      "key_clause": "dinner"
+    },
+    {
+      "receipt_path": "data/submissions/04_alcohol_solo_travel/receipts/05_dinner_franklin.pdf",
+      "expected_verdict": "compliant",
+      "expected_policy_doc": "TEP-001",
+      "key_clause": "alcohol on solo travel"
+    },
+    {
+      "receipt_path": "data/submissions/01_clean_denver/receipts/03_uber_to_hotel.pdf",
+      "expected_verdict": "compliant",
+      "expected_policy_doc": "TEP-005"
+    }
+  ],
+  "qa": [
+    {
+      "question": "What is the dinner cap per person?",
+      "expected_refused": false,
+      "out_of_scope": false
+    },
+    {
+      "question": "What is the weather in Seattle tomorrow?",
+      "expected_refused": true,
+      "out_of_scope": true
+    }
+  ]
+}

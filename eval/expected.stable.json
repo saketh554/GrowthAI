@@ -1,0 +1,66 @@
+{
+  "line_items": [
+    {
+      "receipt_path": "data/submissions/01_clean_denver/receipts/01_united_airlines.pdf",
+      "expected_verdict": "flagged",
+      "expected_policy_doc": "TEP-005"
+    },
+    {
+      "receipt_path": "data/submissions/01_clean_denver/receipts/03_uber_to_hotel.pdf",
+      "expected_verdict": "compliant",
+      "expected_policy_doc": "TEP-005"
+    },
+    {
+      "receipt_path": "data/submissions/01_clean_denver/receipts/04_dinner_mercantile.pdf",
+      "expected_verdict": "compliant",
+      "expected_policy_doc": "TEP-001",
+      "key_clause": "per-meal caps"
+    },
+    {
+      "receipt_path": "data/submissions/02_clean_boston_conf/receipts/03_hilton_back_bay.pdf",
+      "expected_verdict": "rejected",
+      "expected_policy_doc": "TEP-001",
+      "key_clause": "nightly"
+    },
+    {
+      "receipt_path": "data/submissions/02_clean_boston_conf/receipts/06_dinner_eastern.pdf",
+      "expected_verdict": "compliant",
+      "expected_policy_doc": "TEP-001",
+      "key_clause": "dinner"
+    },
+    {
+      "receipt_path": "data/submissions/03_dinner_over_cap/receipts/04_dinner_alinea.pdf",
+      "expected_verdict": "rejected",
+      "expected_policy_doc": "TEP-001",
+      "key_clause": "dinner"
+    },
+    {
+      "receipt_path": "data/submissions/03_dinner_over_cap/receipts/05_breakfast_wildberry.pdf",
+      "expected_verdict": "compliant",
+      "expected_policy_doc": "TEP-001",
+      "key_clause": "breakfast"
+    }
+  ],
+  "qa": [
+    {
+      "question": "What is the dinner cap per person?",
+      "expected_refused": false,
+      "out_of_scope": false
+    },
+    {
+      "question": "What is the weather in Seattle tomorrow?",
+      "expected_refused": true,
+      "out_of_scope": true
+    },
+    {
+      "question": "Under policy code TEP-9999, what is the lunar travel stipend?",
+      "expected_refused": true,
+      "out_of_scope": false
+    },
+    {
+      "question": "Who was the first president of the United States?",
+      "expected_refused": true,
+      "out_of_scope": true
+    }
+  ]
+}

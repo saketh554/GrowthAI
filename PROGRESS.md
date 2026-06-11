@@ -4,7 +4,7 @@ Update this after every verified slice. Newest entry on top. This is the memory 
 Cursor chats — start each new chat by referencing docs/AGENTS.md, docs/PLAN.md, and this file.
 
 ## Status summary
-- Current part: Part 8 (evaluation harness)
+- Current part: Part 9 (deployment, README, polish)
 - Last green commit: (working tree, not committed)
 - Live URL: (not deployed)
 - Known issues / TODO: current policy corpus is incomplete (only 8 PDFs), so judgment is conservative/flag-heavy when similarity or citation support is weak.
@@ -16,6 +16,7 @@ Record any decision that deviates from or refines docs/AGENTS.md, with a one-lin
 ## Slice log
 Format: date - part - what was done - how it was verified - commit/tag
 
+- 2026-06-10 - Part 8 - implemented `eval/run.py` evaluation harness (expected-outcomes JSON ingestion, line-item pipeline execution, QA execution, and metrics table for verdict accuracy/retrieval quality/citation correctness/refusal behavior) and added `eval/expected.sample.json` - verified with `uv run python eval/run.py --expected eval/expected.sample.json` (harness runs end-to-end and prints all required metrics) - (not committed)
 - 2026-06-10 - Part 7 - scaffolded React+Vite+Tailwind frontend and implemented reviewer UI flows (employee selection, submission creation, mixed-file upload, per-line verdict cards with citations/confidence, override form/history, submission history/detail, and policy Q&A panel with decline state) - verified with `npm run build` and `uv run python eval/verify_part7.py` (frontend builds and produces dist artifact) - (not committed)
 - 2026-06-10 - Part 6 - hardened policy QA refusal behavior with explicit out-of-scope refusal, low-similarity refusal, grounded-citation enforcement, and refusal reason field in API responses; added `eval/verify_part6.py` - verified with `uv run python eval/verify_part6.py` (in-scope grounded answer + out-of-scope refusal + weak-evidence refusal all pass) - (not committed)
 - 2026-06-10 - Part 5 - implemented backend API endpoints for employees, submissions, receipt upload+extract+judge+persist flow, submission history/detail filters, verdict override, and policy QA logging; added typed API schemas and QA service - verified with `uv run python eval/verify_part5.py` (health, employees, submission creation, upload flow, listing/detail, override, and QA all pass) - (not committed)
@@ -41,7 +42,7 @@ Format: date - part - what was done - how it was verified - commit/tag
 - [x] Part 5: Backend API
 - [x] Part 6: Policy Q&A with refusal
 - [x] Part 7: Frontend UI
-- [ ] Part 8: Evaluation harness
+- [x] Part 8: Evaluation harness
 - [ ] Part 9: Deployment, README, polish
 
 ## Verification checklist before final submission
