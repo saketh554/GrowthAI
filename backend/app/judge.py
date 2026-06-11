@@ -83,7 +83,7 @@ class JudgmentService:
         trip_context: str,
     ) -> JudgmentOutcome:
         query = self._build_query(extracted, trip_context)
-        retrieved = self._retrieval.retrieve(query=query, k=self._settings.retrieval_top_k)
+        retrieved = self._retrieve_for_judgment(extracted=extracted, trip_context=trip_context, base_query=query)
         if not retrieved:
             return JudgmentOutcome(
                 verdict="flagged",
@@ -221,6 +221,73 @@ class JudgmentService:
             "Prefer explicit cap/threshold clauses over examples, definitions, and related-doc sections. "
             "Do not rely on vendor names or narrative trip-purpose wording for retrieval ranking."
         )
+
+    def _retrieve_for_judgment(
+        self,
+        extracted: ExtractedReceipt,
+        trip_context: str,
+        base_query: str,
+    ) -> list[RetrievalResult]:
+        top_k = self._settings.retrieval_top_k
+        expanded_k = max(top_k * 2, 12)
+        merged: list[RetrievalResult] = self._retrieval.retrieve(query=base_query, k=expanded_k)
+
+        category = (extracted.category or "").lower()
+        city = self._infer_policy_city(trip_context=trip_context, line_details=extracted.line_details) or ""
+        if category in {"ground transport", "travel", "air travel"}:
+            merged.extend(
+                self._retrieval.retrieve(
+                    query="rideshare airport transfer ground transportation reimbursable standard service policy",
+                    k=expanded_k,
+                )
+            )
+            merged.extend(
+                self._retrieval.retrieve(
+                    query="air travel reimbursement commercial passenger flight business purpose policy scope",
+                    k=expanded_k,
+                )
+            )
+        if category in {"lodging", "hotel accommodation", "accommodation", "hotel stay"}:
+            merged.extend(
+                self._retrieval.retrieve(
+                    query=f"city tier rate caps lodging per night cap {city}".strip(),
+                    k=expanded_k,
+                )
+            )
+
+        deduped: list[RetrievalResult] = []
+        seen: set[str] = set()
+        for item in merged:
+            if item.chunk_id in seen:
+                continue
+            seen.add(item.chunk_id)
+            deduped.append(item)
+
+        ranked = sorted(
+            deduped,
+            key=lambda row: (
+                self._category_signal_score(category, row),
+                row.similarity,
+            ),
+            reverse=True,
+        )
+        return ranked[:top_k]
+
+    @staticmethod
+    def _category_signal_score(category: str, row: RetrievalResult) -> float:
+        text = f"{row.section} {row.text}".lower()
+        score = 0.0
+        if "related documents" in text:
+            score -= 0.5
+        if category in {"ground transport", "travel", "air travel"}:
+            if any(token in text for token in ("rideshare", "uber", "lyft", "airport transfer", "ground transportation")):
+                score += 0.4
+            if any(token in text for token in ("air travel", "commercial passenger flight", "seat selection")):
+                score += 0.3
+        if category in {"lodging", "hotel accommodation", "accommodation", "hotel stay"}:
+            if any(token in text for token in ("tier", "city", "per night", "lodging", "hotel", "rate caps")):
+                score += 0.4
+        return score
 
     @staticmethod
     def _infer_policy_city(trip_context: str, line_details: str | None) -> str | None:

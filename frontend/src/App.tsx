@@ -127,7 +127,8 @@ function App() {
   });
 
   const firstVerdictId = useMemo(() => {
-    return submissionDetail?.line_items?.[0]?.verdicts?.[0]?.id ?? null;
+    const verdicts = submissionDetail?.line_items?.[0]?.verdicts ?? [];
+    return verdicts.length > 0 ? verdicts[verdicts.length - 1].id : null;
   }, [submissionDetail]);
 
   async function refreshEmployees() {
@@ -300,6 +301,23 @@ function App() {
       });
     } catch (error) {
       setStatusMessage(`Create employee failed: ${(error as Error).message}`);
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function handleRejudgeLineItem(lineItemId: number) {
+    setIsBusy(true);
+    try {
+      await api<LineItem>(`/api/line-items/${lineItemId}/rejudge`, {
+        method: "POST",
+      });
+      if (selectedSubmissionId) {
+        await refreshSubmissionDetail(selectedSubmissionId);
+      }
+      setStatusMessage(`Rejudged line item #${lineItemId}`);
+    } catch (error) {
+      setStatusMessage(`Rejudge failed: ${(error as Error).message}`);
     } finally {
       setIsBusy(false);
     }
@@ -529,10 +547,20 @@ function App() {
 
               <div className="space-y-3">
                 {submissionDetail.line_items.map((item) => {
-                  const verdict = item.verdicts[0];
+                  const verdict = item.verdicts.length > 0 ? item.verdicts[item.verdicts.length - 1] : undefined;
                   return (
                     <div key={item.id} className={`rounded border p-3 ${verdict ? verdictClasses(verdict.verdict) : "border-slate-200 bg-slate-50"}`}>
-                      <p className="font-semibold">{item.receipt_filename}</p>
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="font-semibold">{item.receipt_filename}</p>
+                        <button
+                          type="button"
+                          onClick={() => handleRejudgeLineItem(item.id)}
+                          disabled={isBusy}
+                          className="rounded border border-indigo-300 px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Rejudge
+                        </button>
+                      </div>
                       <p className="text-sm">
                         {item.vendor ?? "Unknown vendor"} • {item.category ?? "Uncategorized"} • {item.amount ?? "?"} {item.currency ?? ""}
                       </p>

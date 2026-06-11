@@ -305,6 +305,72 @@ def create_app() -> FastAPI:
                 created_at=row.created_at,
             )
 
+    @app.post("/api/line-items/{line_item_id}/rejudge", response_model=LineItemRead)
+    def rejudge_line_item(line_item_id: int) -> LineItemRead:
+        with session_scope(app.state.session_factory) as session:
+            line_item = session.get(models.LineItem, line_item_id)
+            if line_item is None:
+                raise HTTPException(status_code=404, detail="line item not found")
+
+            submission = session.get(models.Submission, line_item.submission_id)
+            if submission is None:
+                raise HTTPException(status_code=404, detail="submission not found")
+
+            receipt_path = Path("./data/uploads") / str(submission.id) / line_item.receipt_filename
+            extraction_outcome = app.state.extraction.extract_receipt(str(receipt_path))
+            judged = app.state.judgment.judge_line_item(
+                extracted=extraction_outcome.extracted,
+                extraction_confidence=extraction_outcome.confidence,
+                trip_context=submission.trip_purpose,
+            )
+
+            line_item.category = extraction_outcome.extracted.category
+            line_item.vendor = extraction_outcome.extracted.vendor
+            line_item.date = extraction_outcome.extracted.date
+            line_item.amount = extraction_outcome.extracted.amount
+            line_item.currency = extraction_outcome.extracted.currency
+            line_item.raw_extraction = extraction_outcome.model_dump()
+
+            verdict = models.Verdict(
+                line_item_id=line_item.id,
+                verdict=judged.verdict,
+                reasoning=judged.reasoning,
+                cited_clauses=[item.model_dump() for item in judged.cited_clauses],
+                confidence=judged.confidence,
+            )
+            session.add(verdict)
+            session.flush()
+
+            all_verdicts = session.scalars(
+                select(models.Verdict)
+                .where(models.Verdict.line_item_id == line_item.id)
+                .order_by(models.Verdict.created_at.asc())
+            ).all()
+
+            return LineItemRead(
+                id=line_item.id,
+                submission_id=line_item.submission_id,
+                receipt_filename=line_item.receipt_filename,
+                category=line_item.category,
+                vendor=line_item.vendor,
+                date=line_item.date,
+                amount=line_item.amount,
+                currency=line_item.currency,
+                raw_extraction=line_item.raw_extraction,
+                verdicts=[
+                    VerdictRead(
+                        id=item.id,
+                        line_item_id=item.line_item_id,
+                        verdict=item.verdict,
+                        reasoning=item.reasoning,
+                        cited_clauses=item.cited_clauses,
+                        confidence=item.confidence,
+                        created_at=item.created_at,
+                    )
+                    for item in all_verdicts
+                ],
+            )
+
     @app.post("/api/qa", response_model=QAResponse)
     def ask_qa(payload: QARequest) -> QAResponse:
         result = app.state.qa.answer(payload.question)
