@@ -232,6 +232,25 @@ class ExtractionService:
 
         line_details = extracted.line_details.strip() if extracted.line_details else None
         attendees = [name.strip() for name in (extracted.attendees or []) if name.strip()] or None
+        details_text = (line_details or "").lower()
+
+        nights = extracted.nights if (extracted.nights is not None and extracted.nights > 0) else None
+        if nights is None and line_details:
+            nights = self._parse_nights_from_text(line_details)
+
+        nightly_rate = extracted.nightly_rate if extracted.nightly_rate is not None else None
+        if nightly_rate is None and line_details:
+            nightly_rate = self._parse_nightly_rate_from_text(line_details)
+        if nightly_rate is None and nights and extracted.amount is not None:
+            nightly_rate = round(float(extracted.amount) / float(nights), 2)
+
+        subtotal = extracted.subtotal if extracted.subtotal is not None else None
+        tip = extracted.tip if extracted.tip is not None else None
+        if "meal" in (normalized_category or "").lower() or meal_type is not None:
+            if subtotal is None and line_details:
+                subtotal = self._parse_subtotal_from_text(line_details)
+            if tip is None and line_details:
+                tip = self._parse_tip_from_text(line_details)
 
         return ExtractedReceipt(
             vendor=vendor,
@@ -239,10 +258,58 @@ class ExtractionService:
             amount=extracted.amount,
             currency=currency,
             category=normalized_category,
+            nights=nights,
+            nightly_rate=nightly_rate,
+            subtotal=subtotal,
+            tip=tip,
             meal_type=meal_type,
             line_details=line_details,
             attendees=attendees,
         )
+
+    @staticmethod
+    def _parse_nights_from_text(text: str) -> int | None:
+        match = re.search(r"\bnights?\s*[:\-]?\s*(\d{1,2})\b", text, re.IGNORECASE)
+        if match:
+            value = int(match.group(1))
+            return value if value > 0 else None
+        alt = re.search(r"\b(\d{1,2})\s+nights?\b", text, re.IGNORECASE)
+        if alt:
+            value = int(alt.group(1))
+            return value if value > 0 else None
+        return None
+
+    @staticmethod
+    def _parse_nightly_rate_from_text(text: str) -> float | None:
+        room_line = re.search(
+            r"\broom\b[^$]{0,40}\$?\s*(\d+(?:\.\d{1,2})?)",
+            text,
+            re.IGNORECASE,
+        )
+        if room_line:
+            return float(room_line.group(1))
+        per_night = re.search(
+            r"\$?\s*(\d+(?:\.\d{1,2})?)\s*(?:/|per)\s*night\b",
+            text,
+            re.IGNORECASE,
+        )
+        if per_night:
+            return float(per_night.group(1))
+        return None
+
+    @staticmethod
+    def _parse_subtotal_from_text(text: str) -> float | None:
+        match = re.search(r"\bsubtotal\b[^$]{0,20}\$?\s*(\d+(?:\.\d{1,2})?)", text, re.IGNORECASE)
+        if match:
+            return float(match.group(1))
+        return None
+
+    @staticmethod
+    def _parse_tip_from_text(text: str) -> float | None:
+        match = re.search(r"\btip\b[^$]{0,20}\$?\s*(\d+(?:\.\d{1,2})?)", text, re.IGNORECASE)
+        if match:
+            return float(match.group(1))
+        return None
 
     @staticmethod
     def _try_parse_date(raw: str) -> str | None:
