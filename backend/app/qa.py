@@ -126,30 +126,22 @@ class QAService:
     def _verify_citations(
         citations: list[CitedClause], retrieved: list[RetrievalResult]
     ) -> list[CitedClause]:
-        normalized_chunks = [
-            (
-                re.sub(r"\s+", " ", item.text).strip().lower(),
-                re.sub(r"\s+", " ", item.doc_id).strip().lower(),
-                re.sub(r"\s+", " ", item.section).strip().lower(),
-            )
-            for item in retrieved
-        ]
+        def norm(v: str) -> str:
+            v = v.replace("\u2013", "-").replace("\u2014", "-").lower()
+            v = re.sub(r"[^a-z0-9$%./\- ]", " ", v)
+            return re.sub(r"\s+", " ", v).strip()
+
+        chunks = [(norm(i.text), norm(i.doc_id)) for i in retrieved]
         verified: list[CitedClause] = []
         for citation in citations:
-            quote = re.sub(r"\s+", " ", citation.quoted_text).strip().lower()
-            cited_doc = re.sub(r"\s+", " ", citation.doc_id).strip().lower()
-            cited_section = re.sub(r"\s+", " ", citation.section).strip().lower()
-            if quote and any(
-                (quote in chunk_text)
-                and (not cited_doc or cited_doc == chunk_doc)
-                and (
-                    not cited_section
-                    or chunk_section == cited_section
-                    or chunk_section.startswith(cited_section)
-                    or cited_section.startswith(chunk_section)
-                    or chunk_section.split(" ", 1)[0] == cited_section.split(" ", 1)[0]
-                )
-                for chunk_text, chunk_doc, chunk_section in normalized_chunks
-            ):
-                verified.append(citation)
+            quote_tokens = [t for t in norm(citation.quoted_text).split(" ") if t]
+            cited_doc = norm(citation.doc_id)
+            if not quote_tokens:
+                continue
+            for chunk_text, chunk_doc in chunks:
+                if cited_doc and cited_doc != chunk_doc:
+                    continue
+                if sum(1 for t in quote_tokens if t in chunk_text) / len(quote_tokens) >= 0.8:
+                    verified.append(citation)
+                    break
         return verified

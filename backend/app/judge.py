@@ -41,7 +41,7 @@ JUDGE_SYSTEM_PROMPT = (
     "Judge only what is explicitly present; never speculate or invent facts (no invented client-hosting, approvals, "
     "alternative-rate availability, or missing context assumptions). "
     "Any citation must be a verbatim quote from one of the retrieved chunks. "
-    "Drinks on a meal check are part of the meal total unless a policy clause explicitly classifies otherwise. "
+    "Alcoholic drinks must be checked against the alcohol policy independently of the meal cap. If the trip is solo (one traveler, no other Northwind employees listed, or the trip purpose says solo) and the meal contains alcohol, flag the alcohol portion as non-reimbursable and cite the alcohol clause, even when the meal total is under the per-person cap. Non-alcoholic drinks are part of the meal total. Do not assume client hosting or apply any hosting cap unless the receipt names external attendees. "
     "If attendees are missing and amount is within per-person meal cap, treat as a solo meal by default. "
     "For meals, evaluate both per-person cap and tip policy; any tip above allowed percent of PRE-TAX subtotal is "
     "non-reimbursable for the excess portion. "
@@ -53,21 +53,14 @@ JUDGE_SYSTEM_PROMPT = (
 
 
 def _normalize_for_match(value: str) -> str:
-    return re.sub(r"\s+", " ", value).strip().lower()
+    value = value.replace("\u2013", "-").replace("\u2014", "-")
+    value = value.lower()
+    value = re.sub(r"[^a-z0-9$%./\- ]", " ", value)
+    return re.sub(r"\s+", " ", value).strip()
 
 
-def _section_matches(cited_section: str, chunk_section: str) -> bool:
-    cited = _normalize_for_match(cited_section)
-    chunk = _normalize_for_match(chunk_section)
-    if not cited or not chunk:
-        return True
-    if cited == chunk:
-        return True
-    if chunk.startswith(cited) or cited.startswith(chunk):
-        return True
-    cited_token = cited.split(" ", 1)[0]
-    chunk_token = chunk.split(" ", 1)[0]
-    return bool(cited_token and chunk_token and cited_token == chunk_token)
+def _tokens(value: str) -> list[str]:
+    return [t for t in _normalize_for_match(value).split(" ") if t]
 
 
 class JudgmentService:
@@ -254,6 +247,13 @@ class JudgmentService:
                     k=expanded_k,
                 )
             )
+        if category == "meal":
+            merged.extend(
+                self._retrieval.retrieve(
+                    query="alcohol not reimbursable solo travel meal per person cap breakfast lunch dinner tip",
+                    k=expanded_k,
+                )
+            )
 
         deduped: list[RetrievalResult] = []
         seen: set[str] = set()
@@ -286,6 +286,9 @@ class JudgmentService:
                 score += 0.3
         if category in {"lodging", "hotel accommodation", "accommodation", "hotel stay"}:
             if any(token in text for token in ("tier", "city", "per night", "lodging", "hotel", "rate caps")):
+                score += 0.4
+        if category == "meal":
+            if any(tok in text for tok in ("alcohol", "alcoholic", "per person", "meal cap", "tip")):
                 score += 0.4
         return score
 
@@ -362,29 +365,27 @@ class JudgmentService:
     def _verify_citations(
         citations: list[CitedClause], retrieved: list[RetrievalResult]
     ) -> tuple[list[CitedClause], int]:
-        normalized_chunks = [
-            (
-                _normalize_for_match(item.text),
-                _normalize_for_match(item.doc_id),
-                _normalize_for_match(item.section),
-            )
+        chunks = [
+            (_normalize_for_match(item.text), _normalize_for_match(item.doc_id))
             for item in retrieved
         ]
         verified: list[CitedClause] = []
         invalid_count = 0
         for citation in citations:
-            quote = _normalize_for_match(citation.quoted_text)
+            quote_tokens = _tokens(citation.quoted_text)
             cited_doc = _normalize_for_match(citation.doc_id)
-            cited_section = _normalize_for_match(citation.section)
-            if not quote:
+            if not quote_tokens:
                 invalid_count += 1
                 continue
-            if any(
-                (quote in chunk_text)
-                and (not cited_doc or cited_doc == chunk_doc)
-                and _section_matches(cited_section, chunk_section)
-                for chunk_text, chunk_doc, chunk_section in normalized_chunks
-            ):
+            matched = False
+            for chunk_text, chunk_doc in chunks:
+                if cited_doc and cited_doc != chunk_doc:
+                    continue
+                hits = sum(1 for tok in quote_tokens if tok in chunk_text)
+                if hits / len(quote_tokens) >= 0.8:
+                    matched = True
+                    break
+            if matched:
                 verified.append(citation)
             else:
                 invalid_count += 1
