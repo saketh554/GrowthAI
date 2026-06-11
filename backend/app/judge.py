@@ -167,15 +167,69 @@ class JudgmentService:
 
     @staticmethod
     def _build_query(extracted: ExtractedReceipt, trip_context: str) -> str:
-        parts = [
-            f"vendor={extracted.vendor or 'unknown'}",
-            f"category={extracted.category or 'unknown'}",
-            f"amount={extracted.amount if extracted.amount is not None else 'unknown'}",
-            f"meal_type={extracted.meal_type or 'n/a'}",
-            f"details={extracted.line_details or 'n/a'}",
-            f"trip_context={trip_context or 'n/a'}",
+        category = (extracted.category or "unknown").strip().lower()
+        amount_text = f"{extracted.amount:.2f}" if extracted.amount is not None else "unknown"
+        meal_type = (extracted.meal_type or "n/a").strip().lower()
+        nights = JudgmentService._infer_nights(extracted.line_details)
+        city = JudgmentService._infer_policy_city(trip_context=trip_context, line_details=extracted.line_details)
+
+        rule_focus = "general reimbursability, documentation requirements, and approval exceptions"
+        if category == "lodging":
+            rule_focus = "lodging city tier, nightly cap, mandatory tax inclusion, and exception documentation"
+        elif category == "meal":
+            rule_focus = "meal per-person caps, alcohol exclusions, and attendee/context requirements"
+        elif category in {"ground transport", "travel"}:
+            rule_focus = "transport eligibility, fare class limits, and reimbursable ground/air expense rules"
+        elif category == "conference":
+            rule_focus = "conference registration eligibility, approval requirements, and reimbursable add-ons"
+
+        facts = [
+            f"category={category}",
+            f"amount_usd={amount_text}",
+            f"currency={(extracted.currency or 'unknown').upper()}",
+            f"meal_type={meal_type}",
+            f"nights={nights if nights is not None else 'unknown'}",
+            f"city={city or 'unknown'}",
         ]
-        return " | ".join(parts)
+        return (
+            "Retrieve governing Northwind policy clauses for expense judgment. "
+            f"Rule focus: {rule_focus}. "
+            f"Facts: {'; '.join(facts)}. "
+            "Prefer explicit cap/threshold clauses over examples, definitions, and related-doc sections. "
+            "Do not rely on vendor names or narrative trip-purpose wording for retrieval ranking."
+        )
+
+    @staticmethod
+    def _infer_policy_city(trip_context: str, line_details: str | None) -> str | None:
+        known_cities = [
+            "Boston",
+            "New York",
+            "San Francisco",
+            "Washington",
+            "Los Angeles",
+            "Seattle",
+            "Chicago",
+            "Denver",
+            "Atlanta",
+            "Austin",
+            "Dallas",
+            "Houston",
+            "Miami",
+            "Portland",
+            "San Diego",
+            "Toronto",
+            "Amsterdam",
+            "Berlin",
+            "London",
+            "Zurich",
+            "Tokyo",
+            "Singapore",
+        ]
+        haystack = f"{trip_context or ''} {line_details or ''}".lower()
+        for city in known_cities:
+            if city.lower() in haystack:
+                return city
+        return None
 
     def _judge_with_model(
         self,
