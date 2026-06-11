@@ -12,10 +12,30 @@ Cursor chats — start each new chat by referencing docs/AGENTS.md, docs/PLAN.md
 ## Decisions log
 Record any decision that deviates from or refines docs/AGENTS.md, with a one-line reason.
 - (example) 2026-06-10 — Chose top_k=5 for retrieval; higher k pulled in noise docs on short queries.
+- 2026-06-10 — Execute Part 9 as gated sub-tasks (deployability -> docs -> live verification) to keep each slice independently verifiable.
+
+## Part 9 execution plan (sub-tasks)
+Work in strict order; do not start the next sub-task until the current one is verified.
+
+- [ ] 9.1 Deployability baseline (local): add production-ready runtime wiring (backend startup command, static/frontend serving strategy, env-driven API base) and confirm local boot works from a clean shell.
+  - Verify: backend health endpoint + frontend loads against production-style API base.
+- [ ] 9.2 Containerization: add Dockerfile (and .dockerignore if missing) for backend+frontend artifact flow with persistent data paths for SQLite/Chroma.
+  - Verify: `docker build` succeeds and container boots with `/api/health` reachable.
+- [ ] 9.3 Deployment config + runbook: add platform config/docs for Render/Railway-style deployment with persistent disk mount requirements and env vars.
+  - Verify: deployment instructions are executable end-to-end by following repo docs only.
+- [ ] 9.4 README overhaul: document architecture (+ diagram), tradeoff rationale, confidence/flag-vs-reject policy, citation faithfulness constraints, eval harness usage, cost-per-submission estimate, and scaling to 10k/day.
+  - Verify: README is sufficient for a clean-clone run and explicitly addresses brief deliverables.
+- [ ] 9.5 Live URL validation: deploy and run browser/API smoke checks for all six capabilities on the public URL.
+  - Verify: health, submission flow, mixed receipts, override persistence, history filters, and Q&A refusal on out-of-scope prompts.
+- [ ] 9.6 Current repo polish: clean up technical debt and consistency gaps in existing code/docs (config hardcoding, naming consistency, stale docs, minor UX/API mismatches, and reliability papercuts).
+  - Verify: targeted regressions pass; no new lint errors; updated docs match actual behavior.
+- [ ] 9.7 Final polish + submission gate: run eval harness and verification checklist, then update `PROGRESS.md` status + final notes.
+  - Verify: all checklist items below are checked or explicitly explained.
 
 ## Slice log
 Format: date - part - what was done - how it was verified - commit/tag
 
+- 2026-06-10 - Part 9.1 - established deployability baseline: made frontend API base env-driven (`VITE_API_BASE` with same-origin fallback), added backend static serving of built frontend (`/` + SPA fallback + `/assets`), and replaced hardcoded upload paths with `settings.uploads_dir`; expanded data-dir bootstrap for upload/sqlite parent dirs - verified with `npm run build` (frontend artifact generated) and FastAPI TestClient smoke checks (`GET /api/health` = 200, `GET /` serves HTML) - (not committed)
 - 2026-06-10 - Part 8 - implemented `eval/run.py` evaluation harness (expected-outcomes JSON ingestion, line-item pipeline execution, QA execution, and metrics table for verdict accuracy/retrieval quality/citation correctness/refusal behavior) and added `eval/expected.sample.json` - verified with `uv run python eval/run.py --expected eval/expected.sample.json` (harness runs end-to-end and prints all required metrics) - (not committed)
 - 2026-06-10 - Part 7 - scaffolded React+Vite+Tailwind frontend and implemented reviewer UI flows (employee selection, submission creation, mixed-file upload, per-line verdict cards with citations/confidence, override form/history, submission history/detail, and policy Q&A panel with decline state) - verified with `npm run build` and `uv run python eval/verify_part7.py` (frontend builds and produces dist artifact) - (not committed)
 - 2026-06-10 - Part 6 - hardened policy QA refusal behavior with explicit out-of-scope refusal, low-similarity refusal, grounded-citation enforcement, and refusal reason field in API responses; added `eval/verify_part6.py` - verified with `uv run python eval/verify_part6.py` (in-scope grounded answer + out-of-scope refusal + weak-evidence refusal all pass) - (not committed)

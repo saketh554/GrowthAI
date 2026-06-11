@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     chroma_path: str = "./data/chroma"
     policies_dir: str = "./data/policies"
     submissions_dir: str = "./data/submissions"
+    uploads_dir: str = "./data/uploads"
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -29,3 +30,5 @@ class Settings(BaseSettings):
 def ensure_data_dirs(settings: Settings) -> None:
     Path("data").mkdir(parents=True, exist_ok=True)
     Path(settings.chroma_path).mkdir(parents=True, exist_ok=True)
+    Path(settings.uploads_dir).mkdir(parents=True, exist_ok=True)
+    Path(settings.sqlite_path).parent.mkdir(parents=True, exist_ok=True)

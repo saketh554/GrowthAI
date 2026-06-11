@@ -8,6 +8,8 @@ from typing import Annotated
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import and_, select
 
 from backend.app import models
@@ -135,7 +137,7 @@ def create_app() -> FastAPI:
             if submission is None:
                 raise HTTPException(status_code=404, detail="submission not found")
 
-            upload_dir = Path("./data/uploads") / str(submission_id)
+            upload_dir = Path(app.state.settings.uploads_dir) / str(submission_id)
             upload_dir.mkdir(parents=True, exist_ok=True)
             created: list[LineItemRead] = []
 
@@ -158,7 +160,7 @@ def create_app() -> FastAPI:
             submission = session.get(models.Submission, submission_id)
             if submission is None:
                 raise HTTPException(status_code=404, detail="submission not found")
-            upload_dir = Path("./data/uploads") / str(submission_id)
+            upload_dir = Path(app.state.settings.uploads_dir) / str(submission_id)
             upload_dir.mkdir(parents=True, exist_ok=True)
             return _process_uploaded_file(
                 session=session,
@@ -316,7 +318,7 @@ def create_app() -> FastAPI:
             if submission is None:
                 raise HTTPException(status_code=404, detail="submission not found")
 
-            receipt_path = Path("./data/uploads") / str(submission.id) / line_item.receipt_filename
+            receipt_path = Path(app.state.settings.uploads_dir) / str(submission.id) / line_item.receipt_filename
             extraction_outcome = app.state.extraction.extract_receipt(str(receipt_path))
             judged = app.state.judgment.judge_line_item(
                 extracted=extraction_outcome.extracted,
@@ -415,6 +417,25 @@ def create_app() -> FastAPI:
             "extraction": extraction_outcome.model_dump(),
             "judgment": judged.model_dump(),
         }
+
+    frontend_dist = Path("frontend/dist")
+    if frontend_dist.exists():
+        assets_dir = frontend_dist / "assets"
+        if assets_dir.exists():
+            app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="frontend-assets")
+
+        @app.get("/", include_in_schema=False)
+        def serve_frontend_index() -> FileResponse:
+            return FileResponse(frontend_dist / "index.html")
+
+        @app.get("/{path_name:path}", include_in_schema=False)
+        def serve_frontend_routes(path_name: str):
+            if path_name.startswith("api/"):
+                raise HTTPException(status_code=404, detail="not found")
+            requested = frontend_dist / path_name
+            if requested.exists() and requested.is_file():
+                return FileResponse(requested)
+            return FileResponse(frontend_dist / "index.html")
 
     return app
 
