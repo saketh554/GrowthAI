@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -153,21 +152,22 @@ class JudgmentService:
     ) -> tuple[Literal["compliant", "flagged", "rejected"], str, str | None]:
         if (extracted.category or "").lower() != "lodging":
             return verdict, reasoning, None
-        if extracted.amount is None:
+        if extracted.nightly_rate is None:
             return verdict, reasoning, None
 
-        nights = cls._infer_nights(extracted.line_details)
         nightly_cap = cls._extract_lodging_nightly_cap(retrieved)
-        if nights is None or nightly_cap is None:
+        if nightly_cap is None:
             return verdict, reasoning, None
 
-        allowed_total = nightly_cap * nights
-        if extracted.amount <= allowed_total + 0.01 and verdict == "rejected":
+        if extracted.nightly_rate <= nightly_cap + 0.01 and verdict == "rejected":
+            nights_text = (
+                f" across {extracted.nights} night(s)" if extracted.nights is not None else ""
+            )
             return (
                 "flagged",
                 (
-                    f"The total lodging amount (${extracted.amount:.2f}) is within the inferred "
-                    f"nightly cap (${nightly_cap:.2f}) across {nights} night(s), so rejection is "
+                    f"The extracted nightly room rate (${extracted.nightly_rate:.2f}) is within the inferred "
+                    f"nightly cap (${nightly_cap:.2f}){nights_text}, so rejection is "
                     "not justified. Routed for human confirmation."
                 ),
                 "lodging guardrail prevented over-cap rejection",
@@ -179,7 +179,6 @@ class JudgmentService:
         category = (extracted.category or "unknown").strip().lower()
         amount_text = f"{extracted.amount:.2f}" if extracted.amount is not None else "unknown"
         meal_type = (extracted.meal_type or "n/a").strip().lower()
-        nights = JudgmentService._infer_nights(extracted.line_details)
         city = JudgmentService._infer_policy_city(trip_context=trip_context, line_details=extracted.line_details)
 
         rule_focus = "general reimbursability, documentation requirements, and approval exceptions"
@@ -197,7 +196,8 @@ class JudgmentService:
             f"amount_usd={amount_text}",
             f"currency={(extracted.currency or 'unknown').upper()}",
             f"meal_type={meal_type}",
-            f"nights={nights if nights is not None else 'unknown'}",
+            f"nights={extracted.nights if extracted.nights is not None else 'unknown'}",
+            f"nightly_rate={extracted.nightly_rate if extracted.nightly_rate is not None else 'unknown'}",
             f"city={city or 'unknown'}",
         ]
         return (
@@ -322,28 +322,6 @@ class JudgmentService:
         if not cap_matches:
             return None
         return min(cap_matches)
-
-    @staticmethod
-    def _infer_nights(line_details: str | None) -> int | None:
-        if not line_details:
-            return None
-        match = re.search(
-            r"from\s+(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})\s+to\s+(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})",
-            line_details,
-            re.IGNORECASE,
-        )
-        if not match:
-            return None
-        start_raw, end_raw = match.group(1), match.group(2)
-        for fmt in ("%d %b %Y", "%d %B %Y"):
-            try:
-                start = datetime.strptime(start_raw, fmt)
-                end = datetime.strptime(end_raw, fmt)
-                nights = (end - start).days
-                return nights if nights > 0 else None
-            except ValueError:
-                continue
-        return None
 
     @staticmethod
     def _compose_confidence(
