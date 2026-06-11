@@ -150,9 +150,9 @@ def _collect_chunks(policies_dir: str) -> list[PolicyChunk]:
 
 def _collection(client: chromadb.ClientAPI, settings: Settings, openai_client: OpenAI) -> Collection:
     return client.get_or_create_collection(
-        name="policy_chunks_v2",
+        name="policy_chunks_v3",
         embedding_function=OpenAIEmbeddingFunction(openai_client, settings.embedding_model),
-        metadata={"embedding_model": settings.embedding_model},
+        metadata={"embedding_model": settings.embedding_model, "hnsw:space": "cosine"},
     )
 
 
@@ -197,8 +197,7 @@ class RetrievalService:
 
         results: list[RetrievalResult] = []
         for chunk_id, text, metadata, distance in zip(ids, docs, metas, distances, strict=False):
-            # Chroma distance scale depends on index metric; map monotonically to [0,1].
-            similarity = 1.0 / (1.0 + max(0.0, float(distance)))
+            similarity = 1.0 - float(distance)
             cross_refs = []
             if metadata and "cross_references" in metadata:
                 raw_refs = metadata["cross_references"]
